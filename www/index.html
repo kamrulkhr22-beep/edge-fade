@@ -1,967 +1,868 @@
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>EDGE FADE STUDIO</title>
-
-<style>
-*{
- box-sizing:border-box;
-}
-
-body{
- margin:0;
- padding:12px;
- background:#10131c;
- color:#f5f6fa;
- font-family:Arial,sans-serif;
-}
-
-.app{
- max-width:900px;
- margin:auto;
-}
-
-header{
- text-align:center;
- padding:15px 0 20px;
-}
-
-h1{
- font-size:29px;
- margin:8px;
-}
-
-header p{
- color:#aab2c5;
- font-size:14px;
-}
-
-.panel{
- background:#1c2331;
- border-radius:15px;
- padding:16px;
- margin-bottom:15px;
-}
-
-h2{
- font-size:19px;
- margin:0 0 14px;
-}
-
-button{
- border:0;
- border-radius:9px;
- padding:12px 15px;
- background:#30394b;
- color:white;
- font-size:14px;
- cursor:pointer;
- margin:3px;
-}
-
-button:disabled{
- opacity:.4;
- cursor:not-allowed;
-}
-
-button.active{
- background:#5369ed;
- outline:2px solid #aab6ff;
-}
-
-.primary{
- background:#5369ed;
-}
-
-.danger{
- background:#853e4b;
-}
-
-input[type=file]{
- display:none;
-}
-
-.upload{
- display:inline-block;
- background:#5369ed;
- padding:13px 18px;
- border-radius:9px;
- cursor:pointer;
- margin-bottom:14px;
-}
-
-#workspace{
- display:block;
- width:100%;
- height:auto;
- background-color:#343b49;
- background-image:
- linear-gradient(45deg,#555 25%,transparent 25%),
- linear-gradient(-45deg,#555 25%,transparent 25%),
- linear-gradient(45deg,transparent 75%,#555 75%),
- linear-gradient(-45deg,transparent 75%,#555 75%);
- background-size:20px 20px;
- background-position:0 0,0 10px,10px -10px,-10px 0;
- border-radius:12px;
- touch-action:none;
-}
-
-.hint{
- font-size:13px;
- color:#aab2c5;
- line-height:1.7;
-}
-
-.tools{
- display:flex;
- flex-wrap:wrap;
- gap:5px;
-}
-
-.layers{
- display:flex;
- flex-wrap:wrap;
- gap:7px;
- margin-top:12px;
-}
-
-.layer{
- padding:10px 14px;
- background:#30394b;
- border-radius:8px;
- cursor:pointer;
- color:white;
- border:0;
-}
-
-.layer.selected{
- background:#5369ed;
- outline:2px solid #aab6ff;
-}
-
-.status{
- color:#aab2c5;
- font-size:13px;
- margin-top:10px;
-}
-
-.line-info{
- display:flex;
- justify-content:space-between;
- gap:10px;
- font-size:13px;
- color:#aab2c5;
- margin-top:12px;
-}
-
-@media(max-width:480px){
- body{padding:9px}
- h1{font-size:25px}
- .panel{padding:13px}
- button{padding:11px 12px}
-}
-</style>
-</head>
-
-<body>
-
-<div class="app">
-
-<header>
-<h1>EDGE FADE STUDIO</h1>
-<p>Professional Linear & Multi-Line Photo Editor</p>
-</header>
-
-<!-- IMAGE WORKSPACE -->
-
-<section class="panel">
-
-<h2>Image Workspace</h2>
-
-<label class="upload" for="file">
-+ Upload Image
-</label>
-
-<input type="file" id="file" accept="image/*">
-
-<canvas id="workspace" width="900" height="700"></canvas>
-
-<div class="status" id="imageInfo">
-No image selected
-</div>
-
-<p class="hint">
-Drag the START and END lines directly on your image.
-START = Transparent
-END = Fully Visible
-</p>
-
-</section>
-
-<!-- FADE DIRECTION -->
-
-<section class="panel">
-
-<h2>Fade Direction</h2>
-
-<div class="tools">
-
-<button class="active" data-angle="0">
-Horizontal
-</button>
-
-<button data-angle="90">
-Vertical
-</button>
-
-<button data-angle="45">
-Diagonal 45°
-</button>
-
-<button data-angle="-45">
-Diagonal -45°
-</button>
-
-</div>
-
-</section>
-
-<!-- FADE LAYERS -->
-
-<section class="panel">
-
-<h2>Fade Layers</h2>
-
-<div class="tools">
-
-<button class="primary" id="add">
-+ Add Fade
-</button>
-
-<button id="duplicate">
-Duplicate
-</button>
-
-<button class="danger" id="delete">
-Delete
-</button>
-
-<button id="reverse">
-Reverse
-</button>
-
-</div>
-
-<div class="layers" id="layers"></div>
-
-<p class="hint">
-Select a layer to edit its START and END lines.
-Multiple fade layers can be used together.
-</p>
-
-</section>
-
-<!-- EXPORT -->
-
-<section class="panel">
-
-<h2>Export Image</h2>
-
-<div class="tools">
-
-<button class="primary" id="png">
-Download PNG
-</button>
-
-<button id="jpg">
-Download JPG
-</button>
-
-<button id="reset">
-Reset All
-</button>
-
-</div>
-
-<p class="hint">
-PNG supports transparent edges.
-JPG exports with a white background.
-Original image dimensions are preserved.
-</p>
-
-</section>
-
-</div>
-
-<script>
-
-const canvas=document.getElementById('workspace');
-const ctx=canvas.getContext('2d');
-
-const fileInput=document.getElementById('file');
-const layerBox=document.getElementById('layers');
-const info=document.getElementById('imageInfo');
-
-let image=null;
-let layers=[];
-let selected=0;
-let dragging=null;
-
-function newLayer(){
-
- const h=canvas.height;
-
- return {
-  angle:0,
-  start:-h*.12,
-  end:h*.12,
-  reverse:false,
-  name:'Fade'
- };
-
-}
-
-// ADD LAYER
-
-function addLayer(){
-
- if(!image)return;
-
- layers.push(newLayer());
-
- selected=layers.length-1;
-
- renderLayers();
- updateDirections();
- render();
-
-}
-
-// LAYER LIST
-
-function renderLayers(){
-
- layerBox.innerHTML='';
-
- layers.forEach((layer,i)=>{
-
-  const b=document.createElement('button');
-
-  b.className='layer'+
-   (i===selected?' selected':'');
-
-  b.textContent=layer.name+' '+(i+1);
-
-  b.onclick=()=>{
-
-   selected=i;
-
-   renderLayers();
-   updateDirections();
-   render();
-
-  };
-
-  layerBox.appendChild(b);
-
- });
-
-}
-
-// DIRECTION BUTTONS
-
-function updateDirections(){
-
- document.querySelectorAll('[data-angle]')
- .forEach(btn=>{
-
-  btn.classList.toggle(
-   'active',
-   layers.length>0 &&
-   Number(btn.dataset.angle)===layers[selected].angle
-  );
-
- });
-
-}
-
-// LINE NORMAL
-
-function getNormal(layer){
-
- const a=layer.angle*Math.PI/180;
-
- return {
-  x:-Math.sin(a),
-  y:Math.cos(a)
- };
-
-}
-
-// LINE POINTS
-
-function getLinePoints(offset,layer){
-
- const a=layer.angle*Math.PI/180;
-
- const tx=Math.cos(a);
- const ty=Math.sin(a);
-
- const n=getNormal(layer);
-
- const cx=canvas.width/2+n.x*offset;
- const cy=canvas.height/2+n.y*offset;
-
- const len=Math.hypot(canvas.width,canvas.height)*2;
-
- return [
-  {x:cx-tx*len,y:cy-ty*len},
-  {x:cx+tx*len,y:cy+ty*len}
- ];
-
-}
-
-// CREATE SMOOTH MASK
-
-function drawMask(target){
-
- const w=canvas.width;
- const h=canvas.height;
-
- const mask=document.createElement('canvas');
-
- mask.width=w;
- mask.height=h;
-
- const mc=mask.getContext('2d');
-
- mc.fillStyle='white';
- mc.fillRect(0,0,w,h);
-
- layers.forEach(layer=>{
-
-  const n=getNormal(layer);
-
-  let s=layer.start;
-  let e=layer.end;
-
-  if(layer.reverse){
-   [s,e]=[e,s];
-  }
-
-  const x1=w/2+n.x*s;
-  const y1=h/2+n.y*s;
-
-  const x2=w/2+n.x*e;
-  const y2=h/2+n.y*e;
-
-  const gradient=mc.createLinearGradient(
-   x1,y1,x2,y2
-  );
-
-  gradient.addColorStop(
-   0,'rgba(255,255,255,0)'
-  );
-
-  gradient.addColorStop(
-   0.10,'rgba(255,255,255,0.028)'
-  );
-
-  gradient.addColorStop(
-   0.25,'rgba(255,255,255,0.156)'
-  );
-
-  gradient.addColorStop(
-   0.50,'rgba(255,255,255,0.5)'
-  );
-
-  gradient.addColorStop(
-   0.75,'rgba(255,255,255,0.844)'
-  );
-
-  gradient.addColorStop(
-   0.90,'rgba(255,255,255,0.972)'
-  );
-
-  gradient.addColorStop(
-   1,'rgba(255,255,255,1)'
-  );
-
-  mc.globalCompositeOperation='destination-in';
-
-  mc.fillStyle=gradient;
-  mc.fillRect(0,0,w,h);
-
-  mc.globalCompositeOperation='source-over';
-
- });
-
- target.drawImage(mask,0,0);
-
-}
-
-// MAIN RENDER
-
-function render(exportMode=false){
-
- ctx.clearRect(
-  0,0,canvas.width,canvas.height
- );
-
- if(image){
-
-  if(layers.length){
-
-   const output=document.createElement('canvas');
-
-   output.width=canvas.width;
-   output.height=canvas.height;
-
-   const oc=output.getContext('2d');
-
-   oc.drawImage(
-    image,0,0,canvas.width,canvas.height
-   );
-
-   oc.globalCompositeOperation='destination-in';
-
-   drawMask(oc);
-
-   oc.globalCompositeOperation='source-over';
-
-   ctx.drawImage(output,0,0);
-
-  }else{
-
-   ctx.drawImage(
-    image,0,0,canvas.width,canvas.height
-   );
-
-  }
-
- }
-
- if(!exportMode){
-
-  layers.forEach((layer,i)=>{
-
-   const start=getLinePoints(layer.start,layer);
-   const end=getLinePoints(layer.end,layer);
-
-   ctx.save();
-
-   ctx.lineWidth=i===selected?3:2;
-
-   ctx.setLineDash([10,7]);
-
-   // START LINE
-
-   ctx.strokeStyle=
-    i===selected?'#63e6c5':'#a5aabc';
-
-   ctx.beginPath();
-
-   ctx.moveTo(start[0].x,start[0].y);
-   ctx.lineTo(start[1].x,start[1].y);
-
-   ctx.stroke();
-
-   // END LINE
-
-   ctx.strokeStyle=
-    i===selected?'#ffffff':'#777e90';
-
-   ctx.beginPath();
-
-   ctx.moveTo(end[0].x,end[0].y);
-   ctx.lineTo(end[1].x,end[1].y);
-
-   ctx.stroke();
-
-   ctx.setLineDash([]);
-
-   ctx.font='bold 16px Arial';
-
-   ctx.fillStyle=
-    i===selected?'#63e6c5':'#a5aabc';
-
-   ctx.fillText('START',15,30+i*22);
-
-   ctx.fillText('END',15,50+i*22);
-
-   ctx.restore();
-
-  });
-
- }
-
-}
-
-// IMAGE UPLOAD
-
-fileInput.addEventListener('change',e=>{
-
- const f=e.target.files[0];
-
- if(!f)return;
-
- if(!f.type.startsWith('image/')){
-  alert('Please select an image.');
-  return;
- }
-
- const url=URL.createObjectURL(f);
-
- const img=new Image();
-
- img.onload=()=>{
-
-  image=img;
-
-  canvas.width=img.naturalWidth;
-  canvas.height=img.naturalHeight;
-
-  layers=[];
-  selected=0;
-
-  info.textContent=
-   img.naturalWidth+' × '+
-   img.naturalHeight+' pixels';
-
-  addLayer();
-
-  URL.revokeObjectURL(url);
-
- };
-
- img.onerror=()=>{
-
-  alert('Could not load this image.');
-
-  URL.revokeObjectURL(url);
-
- };
-
- img.src=url;
-
-});
-
-// CHANGE DIRECTION
-
-document.querySelectorAll('[data-angle]')
-.forEach(btn=>{
-
- btn.onclick=()=>{
-
-  if(!layers.length)return;
-
-  layers[selected].angle=
-   Number(btn.dataset.angle);
-
-  updateDirections();
-
-  render();
-
- };
-
-});
-
-// ADD
-
-document.getElementById('add').onclick=addLayer;
-
-// DUPLICATE
-
-document.getElementById('duplicate').onclick=()=>{
-
- if(!layers.length)return;
-
- const copy={...layers[selected]};
-
- copy.name='Copy';
-
- layers.splice(selected+1,0,copy);
-
- selected++;
-
- renderLayers();
- updateDirections();
- render();
-
-};
-
-// DELETE
-
-document.getElementById('delete').onclick=()=>{
-
- if(!layers.length)return;
-
- layers.splice(selected,1);
-
- selected=Math.max(
-  0,
-  Math.min(selected,layers.length-1)
- );
-
- renderLayers();
- updateDirections();
- render();
-
-};
-
-// REVERSE
-
-document.getElementById('reverse').onclick=()=>{
-
- if(!layers.length)return;
-
- layers[selected].reverse=
-  !layers[selected].reverse;
-
- render();
-
-};
-
-// POINTER POSITION
-
-function pointerPosition(e){
-
- const r=canvas.getBoundingClientRect();
-
- return {
-  x:(e.clientX-r.left)*canvas.width/r.width,
-  y:(e.clientY-r.top)*canvas.height/r.height
- };
-
-}
-
-// DISTANCE TO LINE
-
-function distanceToLine(p,offset,layer){
-
- const pts=getLinePoints(offset,layer);
-
- const a=pts[0];
- const b=pts[1];
-
- const dx=b.x-a.x;
- const dy=b.y-a.y;
-
- const t=Math.max(
-  0,
-  Math.min(1,
-   ((p.x-a.x)*dx+(p.y-a.y)*dy)/
-   (dx*dx+dy*dy)
-  )
- );
-
- return Math.hypot(
-  p.x-a.x-t*dx,
-  p.y-a.y-t*dy
- );
-
-}
-
-// TOUCH AND DRAG
-
-canvas.addEventListener('pointerdown',e=>{
-
- if(!image||!layers.length)return;
-
- const p=pointerPosition(e);
-
- const layer=layers[selected];
-
- const ds=distanceToLine(
-  p,layer.start,layer
- );
-
- const de=distanceToLine(
-  p,layer.end,layer
- );
-
- const rect=canvas.getBoundingClientRect();
-
- const hitRadius=24*canvas.width/rect.width;
-
- if(Math.min(ds,de)>hitRadius)return;
-
- dragging=ds<de?'start':'end';
-
- canvas.setPointerCapture(e.pointerId);
-
-});
-
-canvas.addEventListener('pointermove',e=>{
-
- if(!dragging||!layers.length)return;
-
- const p=pointerPosition(e);
-
- const layer=layers[selected];
-
- const n=getNormal(layer);
-
- const offset=
-  (p.x-canvas.width/2)*n.x+
-  (p.y-canvas.height/2)*n.y;
-
- const limit=Math.hypot(
-  canvas.width,canvas.height
- );
-
- layer[dragging]=Math.max(
-  -limit,
-  Math.min(limit,offset)
- );
-
- render();
-
-});
-
-function stopDragging(){
- dragging=null;
-}
-
-canvas.addEventListener('pointerup',stopDragging);
-
-canvas.addEventListener(
- 'pointercancel',stopDragging
-);
-
-canvas.addEventListener(
- 'lostpointercapture',stopDragging
-);
-
-// EXPORT CANVAS
-
-function createExportCanvas(format){
-
- if(!image){
-  alert('Please upload an image first.');
-  return null;
- }
-
- const out=document.createElement('canvas');
-
- out.width=image.naturalWidth;
- out.height=image.naturalHeight;
-
- const octx=out.getContext('2d');
-
- if(format==='jpg'){
-
-  octx.fillStyle='#ffffff';
-
-  octx.fillRect(
-   0,0,out.width,out.height
-  );
-
- }
-
- const temp=document.createElement('canvas');
-
- temp.width=out.width;
- temp.height=out.height;
-
- const tctx=temp.getContext('2d');
-
- tctx.drawImage(
-  image,0,0,out.width,out.height
- );
-
- if(layers.length){
-
-  tctx.globalCompositeOperation=
-   'destination-in';
-
-  drawMask(tctx);
-
-  tctx.globalCompositeOperation=
-   'source-over';
-
- }
-
- octx.drawImage(temp,0,0);
-
- return out;
-
-}
-
-// DOWNLOAD
-
-function downloadImage(format){
-
- const out=createExportCanvas(format);
-
- if(!out)return;
-
- const mime=format==='jpg'
-  ?'image/jpeg'
-  :'image/png';
-
- out.toBlob(blob=>{
-
-  if(!blob){
-   alert('Export failed. Please try again.');
-   return;
-  }
-
-  const url=URL.createObjectURL(blob);
-
-  const a=document.createElement('a');
-
-  a.href=url;
-
-  a.download=
-   format==='jpg'
-    ?'edge-fade-studio.jpg'
-    :'edge-fade-studio.png';
-
-  document.body.appendChild(a);
-
-  a.click();
-
-  a.remove();
-
-  setTimeout(()=>{
-   URL.revokeObjectURL(url);
-  },2000);
-
- },mime,0.95);
-
-}
-
-document.getElementById('png').onclick=()=>{
- downloadImage('png');
-};
-
-document.getElementById('jpg').onclick=()=>{
- downloadImage('jpg');
-};
-
-// RESET ALL
-
-document.getElementById('reset').onclick=()=>{
-
- if(!image)return;
-
- layers=[];
- selected=0;
-
- addLayer();
-
-};
-
-// INITIAL RENDER
-
-render();
-
-</script>
-
-</body>
+<!DOCTYPE html>  <html lang="en">  
+<head>  
+<meta charset="UTF-8">  
+<meta name="viewport" content="width=device-width, initial-scale=1.0">  <title>EDGE FADE STUDIO</title>  <style>  
+*{  
+ box-sizing:border-box;  
+}  
+  
+body{  
+ margin:0;  
+ padding:12px;  
+ background:#10131c;  
+ color:#f5f6fa;  
+ font-family:Arial,sans-serif;  
+}  
+  
+.app{  
+ max-width:900px;  
+ margin:auto;  
+}  
+  
+header{  
+ text-align:center;  
+ padding:15px 0 20px;  
+}  
+  
+h1{  
+ font-size:29px;  
+ margin:8px;  
+}  
+  
+header p{  
+ color:#aab2c5;  
+ font-size:14px;  
+}  
+  
+.panel{  
+ background:#1c2331;  
+ border-radius:15px;  
+ padding:16px;  
+ margin-bottom:15px;  
+}  
+  
+h2{  
+ font-size:19px;  
+ margin:0 0 14px;  
+}  
+  
+button{  
+ border:0;  
+ border-radius:9px;  
+ padding:12px 15px;  
+ background:#30394b;  
+ color:white;  
+ font-size:14px;  
+ cursor:pointer;  
+ margin:3px;  
+}  
+  
+button:disabled{  
+ opacity:.4;  
+ cursor:not-allowed;  
+}  
+  
+button.active{  
+ background:#5369ed;  
+ outline:2px solid #aab6ff;  
+}  
+  
+.primary{  
+ background:#5369ed;  
+}  
+  
+.danger{  
+ background:#853e4b;  
+}  
+  
+input[type=file]{  
+ display:none;  
+}  
+  
+.upload{  
+ display:inline-block;  
+ background:#5369ed;  
+ padding:13px 18px;  
+ border-radius:9px;  
+ cursor:pointer;  
+ margin-bottom:14px;  
+}  
+  
+#workspace{  
+ display:block;  
+ width:100%;  
+ height:auto;  
+ background-color:#343b49;  
+ background-image:  
+ linear-gradient(45deg,#555 25%,transparent 25%),  
+ linear-gradient(-45deg,#555 25%,transparent 25%),  
+ linear-gradient(45deg,transparent 75%,#555 75%),  
+ linear-gradient(-45deg,transparent 75%,#555 75%);  
+ background-size:20px 20px;  
+ background-position:0 0,0 10px,10px -10px,-10px 0;  
+ border-radius:12px;  
+ touch-action:none;  
+}  
+  
+.hint{  
+ font-size:13px;  
+ color:#aab2c5;  
+ line-height:1.7;  
+}  
+  
+.tools{  
+ display:flex;  
+ flex-wrap:wrap;  
+ gap:5px;  
+}  
+  
+.layers{  
+ display:flex;  
+ flex-wrap:wrap;  
+ gap:7px;  
+ margin-top:12px;  
+}  
+  
+.layer{  
+ padding:10px 14px;  
+ background:#30394b;  
+ border-radius:8px;  
+ cursor:pointer;  
+ color:white;  
+ border:0;  
+}  
+  
+.layer.selected{  
+ background:#5369ed;  
+ outline:2px solid #aab6ff;  
+}  
+  
+.status{  
+ color:#aab2c5;  
+ font-size:13px;  
+ margin-top:10px;  
+}  
+  
+.line-info{  
+ display:flex;  
+ justify-content:space-between;  
+ gap:10px;  
+ font-size:13px;  
+ color:#aab2c5;  
+ margin-top:12px;  
+}  
+  
+@media(max-width:480px){  
+ body{padding:9px}  
+ h1{font-size:25px}  
+ .panel{padding:13px}  
+ button{padding:11px 12px}  
+}  
+</style>  </head>  <body>  <div class="app">  <header>  
+<h1>EDGE FADE STUDIO</h1>  
+<p>Professional Linear & Multi-Line Photo Editor</p>  
+</header>  <!-- IMAGE WORKSPACE -->  <section class="panel">  <h2>Image Workspace</h2>  <label class="upload" for="file">  
++ Upload Image  
+</label>  <input type="file" id="file" accept="image/*">  <canvas id="workspace" width="900" height="700"></canvas>
+
+<div class="status" id="imageInfo">  
+No image selected  
+</div>  <p class="hint">  
+Drag the START and END lines directly on your image.  
+START = Transparent  
+END = Fully Visible  
+</p>  </section>  <!-- FADE DIRECTION -->  <section class="panel">  <h2>Fade Direction</h2>  <div class="tools">  <button class="active" data-angle="0">  
+Horizontal  
+</button>  <button data-angle="90">  
+Vertical  
+</button>  <button data-angle="45">  
+Diagonal 45°  
+</button>  <button data-angle="-45">  
+Diagonal -45°  
+</button>  </div>  </section>  <!-- FADE LAYERS -->  <section class="panel">  <h2>Fade Layers</h2>  <div class="tools">  <button class="primary" id="add">  
++ Add Fade  
+</button>  <button id="duplicate">  
+Duplicate  
+</button>  <button class="danger" id="delete">  
+Delete  
+</button>  <button id="reverse">  
+Reverse  
+</button>  </div>  <div class="layers" id="layers"></div>  <p class="hint">  
+Select a layer to edit its START and END lines.  
+Multiple fade layers can be used together.  
+</p>  </section>  <!-- EXPORT -->  <section class="panel">  <h2>Export Image</h2>  <div class="tools">  <button class="primary" id="png">  
+Download PNG  
+</button>  <button id="jpg">  
+Download JPG  
+</button>  <button id="reset">  
+Reset All  
+</button>  </div>  <p class="hint">  
+PNG supports transparent edges.  
+JPG exports with a white background.  
+Original image dimensions are preserved.  
+</p>  </section>  </div>  <script>  
+  
+const canvas=document.getElementById('workspace');  
+const ctx=canvas.getContext('2d');  
+  
+const fileInput=document.getElementById('file');  
+const layerBox=document.getElementById('layers');  
+const info=document.getElementById('imageInfo');  
+  
+let image=null;  
+let layers=[];  
+let selected=0;  
+let dragging=null;  
+  
+function newLayer(){  
+  
+ const h=canvas.height;  
+  
+ return {  
+  angle:0,  
+  start:-h*.12,  
+  end:h*.12,  
+  reverse:false,  
+  name:'Fade'  
+ };  
+  
+}  
+  
+// ADD LAYER  
+  
+function addLayer(){  
+  
+ if(!image)return;  
+  
+ layers.push(newLayer());  
+  
+ selected=layers.length-1;  
+  
+ renderLayers();  
+ updateDirections();  
+ render();  
+  
+}  
+  
+// LAYER LIST  
+  
+function renderLayers(){  
+  
+ layerBox.innerHTML='';  
+  
+ layers.forEach((layer,i)=>{  
+  
+  const b=document.createElement('button');  
+  
+  b.className='layer'+  
+   (i===selected?' selected':'');  
+  
+  b.textContent=layer.name+' '+(i+1);  
+  
+  b.onclick=()=>{  
+  
+   selected=i;  
+  
+   renderLayers();  
+   updateDirections();  
+   render();  
+  
+  };  
+  
+  layerBox.appendChild(b);  
+  
+ });  
+  
+}  
+  
+// DIRECTION BUTTONS  
+  
+function updateDirections(){  
+  
+ document.querySelectorAll('[data-angle]')  
+ .forEach(btn=>{  
+  
+  btn.classList.toggle(  
+   'active',  
+   layers.length>0 &&  
+   Number(btn.dataset.angle)===layers[selected].angle  
+  );  
+  
+ });  
+  
+}  
+  
+// LINE NORMAL  
+  
+function getNormal(layer){  
+  
+ const a=layer.angle*Math.PI/180;  
+  
+ return {  
+  x:-Math.sin(a),  
+  y:Math.cos(a)  
+ };  
+  
+}  
+  
+// LINE POINTS  
+  
+function getLinePoints(offset,layer){  
+  
+ const a=layer.angle*Math.PI/180;  
+  
+ const tx=Math.cos(a);  
+ const ty=Math.sin(a);  
+  
+ const n=getNormal(layer);  
+  
+ const cx=canvas.width/2+n.x*offset;  
+ const cy=canvas.height/2+n.y*offset;  
+  
+ const len=Math.hypot(canvas.width,canvas.height)*2;  
+  
+ return [  
+  {x:cx-tx*len,y:cy-ty*len},  
+  {x:cx+tx*len,y:cy+ty*len}  
+ ];  
+  
+}  
+  
+// CREATE SMOOTH MASK  
+  
+function drawMask(target){  
+  
+ const w=canvas.width;  
+ const h=canvas.height;  
+  
+ const mask=document.createElement('canvas');  
+  
+ mask.width=w;  
+ mask.height=h;  
+  
+ const mc=mask.getContext('2d');  
+  
+ mc.fillStyle='white';  
+ mc.fillRect(0,0,w,h);  
+  
+ layers.forEach(layer=>{  
+  
+  const n=getNormal(layer);  
+  
+  let s=layer.start;  
+  let e=layer.end;  
+  
+  if(layer.reverse){  
+   [s,e]=[e,s];  
+  }  
+  
+  const x1=w/2+n.x*s;  
+  const y1=h/2+n.y*s;  
+  
+  const x2=w/2+n.x*e;  
+  const y2=h/2+n.y*e;  
+  
+  const gradient=mc.createLinearGradient(  
+   x1,y1,x2,y2  
+  );  
+  
+  gradient.addColorStop(  
+   0,'rgba(255,255,255,0)'  
+  );  
+  
+  gradient.addColorStop(  
+   0.10,'rgba(255,255,255,0.028)'  
+  );  
+  
+  gradient.addColorStop(  
+   0.25,'rgba(255,255,255,0.156)'  
+  );  
+  
+  gradient.addColorStop(  
+   0.50,'rgba(255,255,255,0.5)'  
+  );  
+  
+  gradient.addColorStop(  
+   0.75,'rgba(255,255,255,0.844)'  
+  );  
+  
+  gradient.addColorStop(  
+   0.90,'rgba(255,255,255,0.972)'  
+  );  
+  
+  gradient.addColorStop(  
+   1,'rgba(255,255,255,1)'  
+  );  
+  
+  mc.globalCompositeOperation='destination-in';  
+  
+  mc.fillStyle=gradient;  
+  mc.fillRect(0,0,w,h);  
+  
+  mc.globalCompositeOperation='source-over';  
+  
+ });  
+  
+ target.drawImage(mask,0,0);  
+  
+}  
+  
+// MAIN RENDER  
+  
+function render(exportMode=false){  
+  
+ ctx.clearRect(  
+  0,0,canvas.width,canvas.height  
+ );  
+  
+ if(image){  
+  
+  if(layers.length){  
+  
+   const output=document.createElement('canvas');  
+  
+   output.width=canvas.width;  
+   output.height=canvas.height;  
+  
+   const oc=output.getContext('2d');  
+  
+   oc.drawImage(  
+    image,0,0,canvas.width,canvas.height  
+   );  
+  
+   oc.globalCompositeOperation='destination-in';  
+  
+   drawMask(oc);  
+  
+   oc.globalCompositeOperation='source-over';  
+  
+   ctx.drawImage(output,0,0);  
+  
+  }else{  
+  
+   ctx.drawImage(  
+    image,0,0,canvas.width,canvas.height  
+   );  
+  
+  }  
+  
+ }  
+  
+ if(!exportMode){  
+  
+  layers.forEach((layer,i)=>{  
+  
+   const start=getLinePoints(layer.start,layer);  
+   const end=getLinePoints(layer.end,layer);  
+  
+   ctx.save();  
+  
+   ctx.lineWidth=i===selected?3:2;  
+  
+   ctx.setLineDash([10,7]);  
+  
+   // START LINE  
+  
+   ctx.strokeStyle=  
+    i===selected?'#63e6c5':'#a5aabc';  
+  
+   ctx.beginPath();  
+  
+   ctx.moveTo(start[0].x,start[0].y);  
+   ctx.lineTo(start[1].x,start[1].y);  
+  
+   ctx.stroke();  
+  
+   // END LINE  
+  
+   ctx.strokeStyle=  
+    i===selected?'#ffffff':'#777e90';  
+  
+   ctx.beginPath();  
+  
+   ctx.moveTo(end[0].x,end[0].y);  
+   ctx.lineTo(end[1].x,end[1].y);  
+  
+   ctx.stroke();  
+  
+   ctx.setLineDash([]);  
+  
+   ctx.font='bold 16px Arial';  
+  
+   ctx.fillStyle=  
+    i===selected?'#63e6c5':'#a5aabc';  
+  
+   ctx.fillText('START',15,30+i*22);  
+  
+   ctx.fillText('END',15,50+i*22);  
+  
+   ctx.restore();  
+  
+  });  
+  
+ }  
+  
+}  
+  
+// IMAGE UPLOAD  
+  
+fileInput.addEventListener('change',e=>{  
+  
+ const f=e.target.files[0];  
+  
+ if(!f)return;  
+  
+ if(!f.type.startsWith('image/')){  
+  alert('Please select an image.');  
+  return;  
+ }  
+  
+ const url=URL.createObjectURL(f);  
+  
+ const img=new Image();  
+  
+ img.onload=()=>{  
+  
+  image=img;  
+  
+  canvas.width=img.naturalWidth;  
+  canvas.height=img.naturalHeight;  
+  
+  layers=[];  
+  selected=0;  
+  
+  info.textContent=  
+   img.naturalWidth+' × '+  
+   img.naturalHeight+' pixels';  
+  
+  addLayer();  
+  
+  URL.revokeObjectURL(url);  
+  
+ };  
+  
+ img.onerror=()=>{  
+  
+  alert('Could not load this image.');  
+  
+  URL.revokeObjectURL(url);  
+  
+ };  
+  
+ img.src=url;  
+  
+});  
+  
+// CHANGE DIRECTION  
+  
+document.querySelectorAll('[data-angle]')  
+.forEach(btn=>{  
+  
+ btn.onclick=()=>{  
+  
+  if(!layers.length)return;  
+  
+  layers[selected].angle=  
+   Number(btn.dataset.angle);  
+  
+  updateDirections();  
+  
+  render();  
+  
+ };  
+  
+});  
+  
+// ADD  
+  
+document.getElementById('add').onclick=addLayer;  
+  
+// DUPLICATE  
+  
+document.getElementById('duplicate').onclick=()=>{  
+  
+ if(!layers.length)return;  
+  
+ const copy={...layers[selected]};  
+  
+ copy.name='Copy';  
+  
+ layers.splice(selected+1,0,copy);  
+  
+ selected++;  
+  
+ renderLayers();  
+ updateDirections();  
+ render();  
+  
+};  
+  
+// DELETE  
+  
+document.getElementById('delete').onclick=()=>{  
+  
+ if(!layers.length)return;  
+  
+ layers.splice(selected,1);  
+  
+ selected=Math.max(  
+  0,  
+  Math.min(selected,layers.length-1)  
+ );  
+  
+ renderLayers();  
+ updateDirections();  
+ render();  
+  
+};  
+  
+// REVERSE  
+  
+document.getElementById('reverse').onclick=()=>{  
+  
+ if(!layers.length)return;  
+  
+ layers[selected].reverse=  
+  !layers[selected].reverse;  
+  
+ render();  
+  
+};  
+  
+// POINTER POSITION  
+  
+function pointerPosition(e){  
+  
+ const r=canvas.getBoundingClientRect();  
+  
+ return {  
+  x:(e.clientX-r.left)*canvas.width/r.width,  
+  y:(e.clientY-r.top)*canvas.height/r.height  
+ };  
+  
+}  
+  
+// DISTANCE TO LINE  
+  
+function distanceToLine(p,offset,layer){  
+  
+ const pts=getLinePoints(offset,layer);  
+  
+ const a=pts[0];  
+ const b=pts[1];  
+  
+ const dx=b.x-a.x;  
+ const dy=b.y-a.y;  
+  
+ const t=Math.max(  
+  0,  
+  Math.min(1,  
+   ((p.x-a.x)*dx+(p.y-a.y)*dy)/  
+   (dx*dx+dy*dy)  
+  )  
+ );  
+  
+ return Math.hypot(  
+  p.x-a.x-t*dx,  
+  p.y-a.y-t*dy  
+ );  
+  
+}  
+  
+// TOUCH AND DRAG  
+  
+canvas.addEventListener('pointerdown',e=>{  
+  
+ if(!image||!layers.length)return;  
+  
+ const p=pointerPosition(e);  
+  
+ const layer=layers[selected];  
+  
+ const ds=distanceToLine(  
+  p,layer.start,layer  
+ );  
+  
+ const de=distanceToLine(  
+  p,layer.end,layer  
+ );  
+  
+ const rect=canvas.getBoundingClientRect();  
+  
+ const hitRadius=24*canvas.width/rect.width;  
+  
+ if(Math.min(ds,de)>hitRadius)return;  
+  
+ dragging=ds<de?'start':'end';  
+  
+ canvas.setPointerCapture(e.pointerId);  
+  
+});  
+  
+canvas.addEventListener('pointermove',e=>{  
+  
+ if(!dragging||!layers.length)return;  
+  
+ const p=pointerPosition(e);  
+  
+ const layer=layers[selected];  
+  
+ const n=getNormal(layer);  
+  
+ const offset=  
+  (p.x-canvas.width/2)*n.x+  
+  (p.y-canvas.height/2)*n.y;  
+  
+ const limit=Math.hypot(  
+  canvas.width,canvas.height  
+ );  
+  
+ layer[dragging]=Math.max(  
+  -limit,  
+  Math.min(limit,offset)  
+ );  
+  
+ render();  
+  
+});  
+  
+function stopDragging(){  
+ dragging=null;  
+}  
+  
+canvas.addEventListener('pointerup',stopDragging);  
+  
+canvas.addEventListener(  
+ 'pointercancel',stopDragging  
+);  
+  
+canvas.addEventListener(  
+ 'lostpointercapture',stopDragging  
+);  
+  
+// EXPORT CANVAS  
+  
+function createExportCanvas(format){  
+  
+ if(!image){  
+  alert('Please upload an image first.');  
+  return null;  
+ }  
+  
+ const out=document.createElement('canvas');  
+  
+ out.width=image.naturalWidth;  
+ out.height=image.naturalHeight;  
+  
+ const octx=out.getContext('2d');  
+  
+ if(format==='jpg'){  
+  
+  octx.fillStyle='#ffffff';  
+  
+  octx.fillRect(  
+   0,0,out.width,out.height  
+  );  
+  
+ }  
+  
+ const temp=document.createElement('canvas');  
+  
+ temp.width=out.width;  
+ temp.height=out.height;  
+  
+ const tctx=temp.getContext('2d');  
+  
+ tctx.drawImage(  
+  image,0,0,out.width,out.height  
+ );  
+  
+ if(layers.length){  
+  
+  tctx.globalCompositeOperation=  
+   'destination-in';  
+  
+  drawMask(tctx);  
+  
+  tctx.globalCompositeOperation=  
+   'source-over';  
+  
+ }  
+  
+ octx.drawImage(temp,0,0);  
+  
+ return out;  
+  
+}  
+  
+// DOWNLOAD  
+  
+function downloadImage(format){  
+  
+ const out=createExportCanvas(format);  
+  
+ if(!out)return;  
+  
+ const mime=format==='jpg'  
+  ?'image/jpeg'  
+  :'image/png';  
+  
+ out.toBlob(blob=>{  
+  
+  if(!blob){  
+   alert('Export failed. Please try again.');  
+   return;  
+  }  
+  
+  const url=URL.createObjectURL(blob);  
+  
+  const a=document.createElement('a');  
+  
+  a.href=url;  
+  
+  a.download=  
+   format==='jpg'  
+    ?'edge-fade-studio.jpg'  
+    :'edge-fade-studio.png';  
+  
+  document.body.appendChild(a);  
+  
+  a.click();  
+  
+  a.remove();  
+  
+  setTimeout(()=>{  
+   URL.revokeObjectURL(url);  
+  },2000);  
+  
+ },mime,0.95);  
+  
+}  
+  
+document.getElementById('png').onclick=()=>{  
+ downloadImage('png');  
+};  
+  
+document.getElementById('jpg').onclick=()=>{  
+ downloadImage('jpg');  
+};  
+  
+// RESET ALL  
+  
+document.getElementById('reset').onclick=()=>{  
+  
+ if(!image)return;  
+  
+ layers=[];  
+ selected=0;  
+  
+ addLayer();  
+  
+};  
+  
+// INITIAL RENDER  
+  
+render();  
+  
+</script>  </body>  
 </html>
