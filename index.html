@@ -1,1 +1,205 @@
 
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edge Fade Photo Editor</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;
+ font-family:Arial,sans-serif;
+ background:#10131c;
+ color:#fff;
+ padding:20px;
+}
+.container{max-width:850px;margin:auto}
+h1{text-align:center;font-size:27px}
+.subtitle{text-align:center;color:#aab2c5}
+.panel{
+ background:#1c2230;
+ padding:20px;
+ border-radius:15px;
+ margin-top:20px;
+}
+button,.upload{
+ background:#5268ef;
+ color:white;
+ border:0;
+ padding:13px 18px;
+ border-radius:9px;
+ font-size:15px;
+ cursor:pointer;
+ display:inline-block;
+}
+input[type=file]{display:none}
+input[type=range]{width:100%;margin:15px 0}
+.controls{margin-top:18px}
+label{display:block;margin-bottom:8px}
+.preview{
+ margin-top:20px;
+ min-height:220px;
+ display:flex;
+ justify-content:center;
+ align-items:center;
+ overflow:hidden;
+ border-radius:12px;
+ background-color:#333;
+ background-image:
+ linear-gradient(45deg,#555 25%,transparent 25%),
+ linear-gradient(-45deg,#555 25%,transparent 25%),
+ linear-gradient(45deg,transparent 75%,#555 75%),
+ linear-gradient(-45deg,transparent 75%,#555 75%);
+ background-size:20px 20px;
+ background-position:0 0,0 10px,10px -10px,-10px 0;
+}
+canvas{max-width:100%;height:auto;display:block}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+.actions button{flex:1}
+.secondary{background:#3b4558}
+input[type=range]{accent-color:#657aff}
+.info{text-align:center;color:#aab2c5;font-size:13px;margin-top:15px}
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Edge Fade Editor</h1>
+<p class="subtitle">Professional Image Edge Fading Tool</p>
+
+<div class="panel">
+<label class="upload" for="upload">+ Upload Image</label>
+<input type="file" id="upload" accept="image/*">
+
+<div class="controls">
+<label>Edge Fade Amount: <span id="amount">35</span>%</label>
+<input type="range" id="fade" min="0" max="90" value="35">
+
+<label>Fade Softness: <span id="soft">30</span>%</label>
+<input type="range" id="softness" min="1" max="100" value="30">
+</div>
+
+<div class="preview" id="preview">
+<p id="placeholder">Upload an image to start editing</p>
+<canvas id="canvas" hidden></canvas>
+</div>
+
+<div class="actions">
+<button id="save">Download PNG</button>
+<button class="secondary" id="reset">Reset</button>
+</div>
+
+<p class="info">Your images are processed locally on your device.</p>
+</div>
+</div>
+
+<script>
+const upload=document.getElementById('upload');
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+const fade=document.getElementById('fade');
+const softness=document.getElementById('softness');
+const amount=document.getElementById('amount');
+const soft=document.getElementById('soft');
+const placeholder=document.getElementById('placeholder');
+
+let image=null;
+
+function render(){
+ if(!image)return;
+
+ const w=canvas.width;
+ const h=canvas.height;
+
+ ctx.clearRect(0,0,w,h);
+ ctx.globalCompositeOperation='source-over';
+ ctx.drawImage(image,0,0,w,h);
+
+ const f=Number(fade.value)/100;
+ const s=Number(softness.value)/100;
+
+ const radius=Math.sqrt(w*w+h*h)/2;
+ const centerX=w/2;
+ const centerY=h/2;
+
+ const inner=1-f;
+ const outer=Math.min(1,inner+s*f+0.001);
+
+ const gradient=ctx.createRadialGradient(
+ centerX,centerY,radius*inner,
+ centerX,centerY,radius*outer
+ );
+
+ gradient.addColorStop(0,'rgba(255,255,255,1)');
+ gradient.addColorStop(1,'rgba(255,255,255,0)');
+
+ ctx.globalCompositeOperation='destination-in';
+ ctx.fillStyle=gradient;
+ ctx.fillRect(0,0,w,h);
+ ctx.globalCompositeOperation='source-over';
+}
+
+upload.addEventListener('change',e=>{
+ const file=e.target.files[0];
+ if(!file)return;
+
+ const url=URL.createObjectURL(file);
+ const img=new Image();
+
+ img.onload=()=>{
+ image=img;
+ canvas.width=img.naturalWidth;
+ canvas.height=img.naturalHeight;
+ canvas.hidden=false;
+ placeholder.hidden=true;
+ render();
+ URL.revokeObjectURL(url);
+ };
+
+ img.onerror=()=>{
+ alert('Could not load this image.');
+ URL.revokeObjectURL(url);
+ };
+
+ img.src=url;
+});
+
+fade.addEventListener('input',()=>{
+ amount.textContent=fade.value;
+ render();
+});
+
+softness.addEventListener('input',()=>{
+ soft.textContent=softness.value;
+ render();
+});
+
+document.getElementById('save').addEventListener('click',()=>{
+ if(!image){
+ alert('Please upload an image first.');
+ return;
+ }
+
+ canvas.toBlob(blob=>{
+ if(!blob)return;
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');
+ a.href=url;
+ a.download='edge-fade-image.png';
+ a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+ },'image/png');
+});
+
+document.getElementById('reset').addEventListener('click',()=>{
+ fade.value=35;
+ softness.value=30;
+ amount.textContent='35';
+ soft.textContent='30';
+ render();
+});
+</script>
+</body>
+</html>
